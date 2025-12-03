@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ToolMaster Pro - All-in-One Tools</title>
+    <meta name="description" content="Access 50+ free online tools including Invoice Generator, Investment Calculator, Unit Converters, and more." />
+    
+    <!-- Error Handling Script (Runs before anything else) -->
+    <script>
+      window.onerror = function(msg, url, line, col, error) {
+        const loader = document.getElementById('app-loader');
+        if(loader) loader.style.display = 'none';
+        
+        const errorBox = document.getElementById('global-error');
+        if(errorBox) {
+            errorBox.style.display = 'block';
+            document.getElementById('error-msg').textContent = msg;
+            document.getElementById('error-detail').textContent = `Line: ${line}, Col: ${col}\nURL: ${url}`;
+        }
+      };
+    </script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7', 900: '#0c4a6e' }
+            }
+          }
+        }
+      }
+    </script>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; }
+      @media print {
+        .no-print { display: none !important; }
+        body { background: white; }
+        .container { max-width: none !important; width: 100% !important; padding: 0 !important; margin: 0 !important; }
+      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      
+      /* Loading Spinner */
+      #app-loader {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: #f8fafc; display: flex; justify-content: center; align-items: center; flex-direction: column;
+          z-index: 9999;
+      }
+      .spinner { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top: 4px solid #0ea5e9; border-radius: 50%; animation: spin 1s linear infinite; }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      
+      /* Error Box */
+      #global-error {
+          display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+          width: 90%; max-width: 600px; background: #fee2e2; border: 1px solid #ef4444;
+          color: #b91c1c; padding: 20px; rounded: 8px; z-index: 10000; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+
+    <!-- Import Map (Using ?bundle to ensure dependencies load correctly) -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0?bundle",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?bundle",
+        "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?bundle",
+        "lucide-react": "https://esm.sh/lucide-react@0.344.0?bundle",
+        "recharts": "https://esm.sh/recharts@2.12.2?bundle",
+        "@google/genai": "https://esm.sh/@google/genai@0.1.1?bundle",
+        "qrcode.react": "https://esm.sh/qrcode.react@3.1.0?bundle",
+        "uuid": "https://esm.sh/uuid@9.0.1?bundle",
+        "spark-md5": "https://esm.sh/spark-md5@3.0.2?bundle",
+        "terser": "https://esm.sh/terser@5.31.0?bundle",
+        "html-beautify": "https://esm.sh/js-beautify@1.15.1/js/lib/beautify-html.js",
+        "css-beautify": "https://esm.sh/js-beautify@1.15.1/js/lib/beautify-css.js",
+        "js-beautify": "https://esm.sh/js-beautify@1.15.1/js/lib/beautify.js"
+      }
+    }
+    </script>
+    
+    <script>
+        // --- API KEY CONFIGURATION ---
+        // The PHP Plugin will replace '%%WP_PLUGIN_API_KEY%%' with the real key from database
+        // If running standalone, you must replace this manually.
+        window.process = { 
+            env: { 
+                API_KEY: '%%WP_PLUGIN_API_KEY%%' 
+            } 
+        };
+    </script>
+</head>
+<body>
+    <!-- Loader -->
+    <div id="app-loader">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; color: #64748b; font-family: sans-serif;">Loading ToolMaster...</p>
+    </div>
+
+    <!-- Error Display -->
+    <div id="global-error">
+        <h3 style="margin: 0 0 10px 0; font-weight: bold;">Something went wrong</h3>
+        <p id="error-msg" style="margin: 0 0 10px 0;">Unknown error</p>
+        <pre id="error-detail" style="background: rgba(255,255,255,0.5); padding: 10px; font-size: 12px; overflow: auto;"></pre>
+        <p style="font-size: 12px; margin-top: 10px;">Please check your internet connection or verify the API Key in WordPress settings.</p>
+    </div>
+
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, useMemo } from 'react';
+        import ReactDOM from 'react-dom/client';
+        import { HashRouter, Routes, Route, Link, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
+        import * as Lucide from 'lucide-react';
+        import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
+        import { QRCodeCanvas } from 'qrcode.react';
+        import { GoogleGenAI } from "@google/genai";
+        import { v1, v3, v4, v5, validate } from 'uuid';
+        import SparkMD5 from 'spark-md5';
+
+        // Hide loader when React starts
+        const loader = document.getElementById('app-loader');
+        if(loader) loader.style.display = 'none';
+
+        // --- ICONS ---
+        const { 
+            Menu, X, Search, Wrench, Facebook, Twitter, Instagram, Linkedin,
+            Calculator, FileText, QrCode, Image as ImageIcon, Code, DollarSign, Repeat, Type,
+            Binary, Hash, Palette, Percent, Activity, Calendar, Globe, BarChart, CreditCard,
+            Lock, Key, FileCode, Video, Keyboard, ShieldCheck, Scissors, Eye, 
+            MessageSquare, ImagePlus, Sparkles, Upload, Printer, Download, Trash2, Plus,
+            ArrowLeft, Star, Share2, Check, Copy, RefreshCw, AlertCircle, TrendingUp,
+            ArrowRightLeft, Mail, Play, ExternalLink, Film, User, Bot, AlignLeft, Minimize2,
+            RotateCcw, Scan, Fingerprint, Settings, List, Regex, Code2, Link: LinkIcon
+        } = Lucide;
+
+        // --- CONSTANTS & TYPES ---
+        const ToolCategory = {
+            FINANCE: 'Finance',
+            DEVELOPER: 'Developer',
+            CONVERTER: 'Converter',
+            IMAGE: 'Image',
+            AI: 'AI Powered'
+        };
+
+        // --- SERVICES ---
+        const apiKey = window.process?.env?.API_KEY || '';
+        const ai = new GoogleGenAI({ apiKey });
+
+        const generateCodeSnippet = async (prompt) => {
+            try {
+                if (!apiKey || apiKey.includes('%%')) return "<!-- API Key missing in WordPress Settings -->";
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: `You are an expert web developer. Generate a simple, standalone HTML/CSS/JS code snippet for: "${prompt}". The code should be a single HTML block containing <style> and <script> tags if needed. Do not include markdown formatting like \`\`\`html. Just return the raw code.`,
+                });
+                return response.text || '<!-- No code generated -->';
+            } catch (error) { console.error(error); return "<!-- Error generating code. Check API Key or Quota. -->"; }
+        };
+
+        const performOCR = async (base64Image) => {
+            try {
+                if (!apiKey || apiKey.includes('%%')) return "Error: API Key missing. Please configure it in WordPress.";
+                let mimeType = 'image/jpeg';
+                let data = base64Image;
+                if (base64Image.includes(';base64,')) {
+                    const parts = base64Image.split(';base64,');
+                    mimeType = parts[0].replace('data:', '');
+                    data = parts[1];
+                }
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: { parts: [{ inlineData: { mimeType, data } }, { text: "Extract all text from this image. Return only the text." }] }
+                });
+                return response.text || '';
+            } catch (error) { return "Error extracting text. Please ensure the image is clear and try again."; }
+        };
+
+        const generateImage = async (prompt) => {
+            try {
+                if (!apiKey || apiKey.includes('%%')) return null;
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash-image',
+                    contents: { parts: [{ text: prompt }] },
+                });
+                for (const part of response.candidates?.[0]?.content?.parts || []) {
+                    if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+                }
+                return null;
+            } catch (error) { return null; }
+        };
+
+        // --- SHARED COMPONENTS ---
+        const AdUnit = ({ type }) => (
+            <div className="bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-sm font-medium mx-auto my-4 no-print h-[90px] w-full max-w-[728px] rounded-lg">
+                <div className="text-center"><p className="uppercase tracking-wider mb-1 text-[10px]">Advertisement</p><p className="text-xs opacity-75">{type} placement</p></div>
+            </div>
+        );
+
+        const ShareModal = ({ isOpen, onClose, title, url }) => {
+            if (!isOpen) return null;
+            const handleCopy = () => { navigator.clipboard.writeText(url); };
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in" onClick={onClose}>
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between mb-6 items-center"><h3 className="font-bold text-lg">Share Tool</h3><button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X/></button></div>
+                        <div className="flex items-center bg-slate-50 border p-3 rounded-xl"><input value={url} readOnly className="bg-transparent flex-1 outline-none text-sm text-slate-600" /><button onClick={handleCopy} className="ml-2 p-2 hover:bg-white rounded-lg shadow-sm"><Copy className="w-4 h-4"/></button></div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- TOOL COMPONENTS ---
+
+        const InvoiceGenerator = () => {
+            const [items, setItems] = useState([{id:1, desc:'Web Development Services', qty:1, price:1000}]);
+            const [curr, setCurr] = useState('$');
+            const total = items.reduce((acc, i) => acc + (i.qty * i.price), 0);
+            return (
+                <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-sm border" id="invoice">
+                    <div className="flex justify-between mb-8 flex-wrap gap-4">
+                        <h1 className="text-3xl font-bold text-slate-800">INVOICE</h1>
+                        <div className="flex gap-2 no-print">
+                            <button onClick={()=>window.print()} className="bg-slate-100 p-2 rounded hover:bg-slate-200"><Printer/></button>
+                            <select value={curr} onChange={e=>setCurr(e.target.value)} className="border rounded p-2"><option value="$">USD ($)</option><option value="€">EUR (€)</option><option value="£">GBP (£)</option></select>
+                        </div>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-8 mb-8">
+                        <div><h3 className="font-bold text-slate-400 uppercase text-xs mb-2">From</h3><textarea className="w-full border p-2 rounded bg-slate-50" rows={3} defaultValue="Your Company Name" /></div>
+                        <div><h3 className="font-bold text-slate-400 uppercase text-xs mb-2">To</h3><textarea className="w-full border p-2 rounded bg-slate-50" rows={3} defaultValue="Client Name" /></div>
+                    </div>
+                    <div className="mb-8 space-y-2">
+                        <div className="grid grid-cols-12 gap-2 font-bold text-xs uppercase text-slate-500 mb-2 pl-2">
+                            <div className="col-span-6">Description</div><div className="col-span-2 text-right">Qty</div><div className="col-span-2 text-right">Price</div><div className="col-span-2"></div>
+                        </div>
+                        {items.map(i => (
+                        <div key={i.id} className="grid grid-cols-12 gap-2 items-center">
+                            <div className="col-span-6"><input className="w-full border-b p-1 focus:border-brand-500 outline-none" value={i.desc} onChange={e=>setItems(items.map(x=>x.id===i.id?{...x,desc:e.target.value}:x))} /></div>
+                            <div className="col-span-2"><input type="number" className="w-full border-b p-1 text-right focus:border-brand-500 outline-none" value={i.qty} onChange={e=>setItems(items.map(x=>x.id===i.id?{...x,qty:+e.target.value}:x))} /></div>
+                            <div className="col-span-2"><input type="number" className="w-full border-b p-1 text-right focus:border-brand-500 outline-none" value={i.price} onChange={e=>setItems(items.map(x=>x.id===i.id?{...x,price:+e.target.value}:x))} /></div>
+                            <div className="col-span-2 text-right"><button onClick={()=>setItems(items.filter(x=>x.id!==i.id))} className="text-red-400 hover:text-red-600 no-print"><Trash2 className="w-4 h-4"/></button></div>
+                        </div>
+                    ))}</div>
+                    <button onClick={()=>setItems([...items, {id:Date.now(),desc:'',qty:1,price:0}])} className="text-brand-600 font-bold text-sm no-print flex items-center gap-1"><Plus className="w-4 h-4"/> Add Line Item</button>
+                    <div className="text-right text-2xl font-bold mt-8 border-t pt-4">Total: {curr}{total.toFixed(2)}</div>
+                </div>
+            );
+        };
+
+        const InvestmentCalculator = () => {
+            const [p, setP] = useState(10000);
+            const [r, setR] = useState(7);
+            const [t, setT] = useState(10);
+            const [c, setC] = useState(500);
+            const data = useMemo(() => {
+                const d = [];
+                let bal = p, inv = p;
+                for(let i=0; i<=t; i++) { 
+                    d.push({year:i, balance: Math.round(bal), invested: inv}); 
+                    bal += bal*(r/100) + (c*12); 
+                    inv += (c*12); 
+                }
+                return d;
+            }, [p,r,t,c]);
+            return (
+                <div className="grid md:grid-cols-3 gap-6">
+                    <div className="bg-white p-6 rounded-xl border space-y-4 h-fit shadow-sm">
+                        <h3 className="font-bold text-slate-800">Parameters</h3>
+                        <div><label className="block text-xs font-bold mb-1">Start Amount ($)</label><input type="number" value={p} onChange={e=>setP(+e.target.value)} className="border w-full p-2 rounded"/></div>
+                        <div><label className="block text-xs font-bold mb-1">Monthly Contrib. ($)</label><input type="number" value={c} onChange={e=>setC(+e.target.value)} className="border w-full p-2 rounded"/></div>
+                        <div><label className="block text-xs font-bold mb-1">Rate (%)</label><input type="number" value={r} onChange={e=>setR(+e.target.value)} className="border w-full p-2 rounded"/></div>
+                        <div><label className="block text-xs font-bold mb-1">Years: {t}</label><input type="range" min="1" max="50" value={t} onChange={e=>setT(+e.target.value)} className="w-full accent-brand-600"/></div>
+                    </div>
+                    <div className="md:col-span-2 space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="bg-white p-4 rounded-xl border-l-4 border-brand-500 shadow-sm"><p className="text-xs text-slate-500">Total</p><p className="text-xl font-bold">${data[data.length-1].balance.toLocaleString()}</p></div>
+                            <div className="bg-white p-4 rounded-xl border-l-4 border-emerald-500 shadow-sm"><p className="text-xs text-slate-500">Interest</p><p className="text-xl font-bold text-emerald-600">${(data[data.length-1].balance - data[data.length-1].invested).toLocaleString()}</p></div>
+                            <div className="bg-white p-4 rounded-xl border-l-4 border-slate-400 shadow-sm"><p className="text-xs text-slate-500">Invested</p><p className="text-xl font-bold text-slate-600">${data[data.length-1].invested.toLocaleString()}</p></div>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border h-[300px] shadow-sm">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={data} margin={{top:5,right:20,bottom:5,left:0}}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey="year" fontSize={12}/><YAxis fontSize={12} tickFormatter={v=>`$${v/1000}k`}/><RechartsTooltip/><Legend/>
+                                    <Line type="monotone" dataKey="balance" stroke="#0ea5e9" strokeWidth={3} dot={false}/>
+                                    <Line type="monotone" dataKey="invested" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" dot={false}/>
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AIChat = () => {
+            const [msgs, setMsgs] = useState([{role:'model', text:"Hi! I'm ToolMaster AI. How can I help you?"}]);
+            const [txt, setTxt] = useState('');
+            const [loading, setLoading] = useState(false);
+            const send = async () => {
+                if(!txt) return;
+                if (!apiKey || apiKey.includes('%%')) {
+                    setMsgs(p=>[...p,{role:'user', text:txt}, {role:'model', text: "Please enter your Google Gemini API Key in the WordPress Plugin Settings to use AI features."}]);
+                    setTxt('');
+                    return;
+                }
+                
+                const uMsg = txt; setTxt(''); setMsgs(p => [...p, {role:'user', text: uMsg}]); setLoading(true);
+                try {
+                    const chat = ai.chats.create({ model: 'gemini-2.5-flash' });
+                    const res = await chat.sendMessage({ message: uMsg });
+                    setMsgs(p => [...p, {role:'model', text: res.text}]);
+                } catch(e) { setMsgs(p => [...p, {role:'model', text: 'Error connecting to AI. Check your API Key.'}]); }
+                setLoading(false);
+            };
+            return (
+                <div className="h-[600px] flex flex-col border rounded-xl bg-white shadow-sm overflow-hidden">
+                    <div className="bg-slate-50 p-4 border-b font-bold text-slate-700 flex gap-2 items-center"><Bot className="w-5 h-5 text-brand-600"/> AI Assistant</div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+                        {msgs.map((m,i) => (
+                            <div key={i} className={`flex ${m.role==='user'?'justify-end':''}`}>
+                                <div className={`p-3 rounded-2xl max-w-[80%] text-sm whitespace-pre-wrap ${m.role==='user'?'bg-slate-800 text-white rounded-tr-none':'bg-white border rounded-tl-none shadow-sm'}`}>{m.text}</div>
+                            </div>
+                        ))}
+                        {loading && <div className="text-xs text-slate-400 text-center animate-pulse">Thinking...</div>}
+                    </div>
+                    <div className="p-4 bg-white border-t flex gap-2">
+                        <input value={txt} onChange={e=>setTxt(e.target.value)} className="flex-1 bg-slate-100 border-none rounded-xl px-4 py-2 focus:ring-2 focus:ring-brand-500 outline-none" placeholder="Ask anything..." onKeyDown={e=>e.key==='Enter'&&send()}/>
+                        <button onClick={send} disabled={loading} className="bg-brand-600 text-white p-2 rounded-xl hover:bg-brand-700 transition"><Lucide.Send className="w-5 h-5"/></button>
+                    </div>
+                </div>
+            );
+        };
+
+        const UUIDGenerator = () => {
+            const [ids, setIds] = useState([]);
+            const [ver, setVer] = useState('v4');
+            const gen = () => {
+                const newIds = Array(5).fill(0).map(() => {
+                    if(ver==='v1') return v1();
+                    return v4();
+                });
+                setIds(newIds);
+            };
+            return (
+                <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
+                    <div className="flex gap-4">
+                        <select value={ver} onChange={e=>setVer(e.target.value)} className="border p-2 rounded bg-slate-50"><option value="v4">Version 4 (Random)</option><option value="v1">Version 1 (Time)</option></select>
+                        <button onClick={gen} className="bg-brand-600 text-white px-4 py-2 rounded font-bold flex items-center gap-2"><RefreshCw className="w-4 h-4"/> Generate</button>
+                    </div>
+                    <textarea readOnly value={ids.join('\n')} className="w-full h-48 border rounded p-3 font-mono text-sm bg-slate-50 outline-none" placeholder="UUIDs will appear here"/>
+                </div>
+            );
+        };
+
+        const QRCodeGenerator = () => {
+            const [text, setText] = useState('https://example.com');
+            const [color, setColor] = useState('#000000');
+            return (
+                <div className="grid md:grid-cols-2 gap-8 bg-white p-8 rounded-xl border shadow-sm">
+                    <div className="space-y-4">
+                        <div><label className="block text-sm font-bold mb-1">Content</label><textarea value={text} onChange={e=>setText(e.target.value)} className="border p-2 w-full rounded h-32" placeholder="Enter URL or text..." /></div>
+                        <div><label className="block text-sm font-bold mb-1">Color</label><input type="color" value={color} onChange={e=>setColor(e.target.value)} className="w-full h-10 cursor-pointer" /></div>
+                    </div>
+                    <div className="flex items-center justify-center bg-slate-50 rounded-xl p-8 border-2 border-dashed">
+                        <div className="bg-white p-4 shadow-lg rounded"><QRCodeCanvas value={text} size={200} fgColor={color} /></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const UnitConverter = () => {
+            const [cat, setCat] = useState('length');
+            const [val, setVal] = useState(1);
+            const [from, setFrom] = useState('m');
+            const [to, setTo] = useState('ft');
+            const units = { 
+                length: { m:1, km:1000, cm:0.01, ft:0.3048, in:0.0254, mi:1609.34 },
+                weight: { kg:1, g:0.001, lb:0.453592, oz:0.0283495 }
+            };
+            const res = val * (units[cat][from] / units[cat][to]);
+            return (
+                <div className="bg-white p-8 rounded-xl border shadow-sm max-w-2xl mx-auto">
+                    <div className="flex justify-center gap-4 mb-6">
+                        <button onClick={()=>{setCat('length');setFrom('m');setTo('ft')}} className={`px-4 py-1 rounded-full text-sm ${cat==='length'?'bg-brand-100 text-brand-700':'bg-slate-100'}`}>Length</button>
+                        <button onClick={()=>{setCat('weight');setFrom('kg');setTo('lb')}} className={`px-4 py-1 rounded-full text-sm ${cat==='weight'?'bg-brand-100 text-brand-700':'bg-slate-100'}`}>Weight</button>
+                    </div>
+                    <div className="flex gap-4 items-center">
+                        <div className="flex-1"><input type="number" value={val} onChange={e=>setVal(+e.target.value)} className="w-full border p-3 rounded-lg text-center text-lg font-bold"/><select value={from} onChange={e=>setFrom(e.target.value)} className="w-full mt-2 border p-2 rounded">{Object.keys(units[cat]).map(u=><option key={u} value={u}>{u}</option>)}</select></div>
+                        <ArrowRightLeft className="text-slate-400"/>
+                        <div className="flex-1"><div className="w-full bg-slate-100 p-3 rounded-lg text-center text-lg font-bold truncate">{res.toFixed(4)}</div><select value={to} onChange={e=>setTo(e.target.value)} className="w-full mt-2 border p-2 rounded">{Object.keys(units[cat]).map(u=><option key={u} value={u}>{u}</option>)}</select></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const TimezoneConverter = () => {
+            const [date, setDate] = useState(new Date().toISOString().slice(0,16));
+            const [base, setBase] = useState('UTC');
+            const [targets, setTargets] = useState(['America/New_York', 'Asia/Tokyo', 'Europe/London']);
+            const zones = ["UTC", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Tokyo", "Asia/Dubai", "Australia/Sydney"];
+            return (
+                <div className="max-w-3xl mx-auto space-y-6">
+                    <div className="bg-white p-6 rounded-xl border shadow-sm">
+                        <div className="flex gap-4 mb-4">
+                            <input type="datetime-local" value={date} onChange={e=>setDate(e.target.value)} className="border p-2 rounded flex-1"/>
+                            <select value={base} onChange={e=>setBase(e.target.value)} className="border p-2 rounded">{zones.map(z=><option key={z} value={z}>{z}</option>)}</select>
+                        </div>
+                        <div className="space-y-2">
+                            {targets.map(t => {
+                                const d = new Date(date);
+                                const time = d.toLocaleTimeString('en-US', {timeZone: t, hour:'2-digit', minute:'2-digit'});
+                                const dt = d.toLocaleDateString('en-US', {timeZone: t, weekday:'short', month:'short', day:'numeric'});
+                                return (
+                                    <div key={t} className="flex justify-between items-center bg-slate-50 p-3 rounded border">
+                                        <span className="font-bold text-slate-700">{t.replace('_',' ')}</span>
+                                        <div className="text-right"><div className="font-mono font-bold text-lg">{time}</div><div className="text-xs text-slate-500">{dt}</div></div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ImageBase64 = () => {
+            const [b64, setB64] = useState('');
+            const handle = e => {
+                const f = e.target.files[0];
+                if(f) { const r = new FileReader(); r.onload = ev => setB64(ev.target.result); r.readAsDataURL(f); }
+            };
+            return (
+                <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
+                    <input type="file" onChange={handle} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"/>
+                    {b64 && <textarea readOnly value={b64} className="w-full h-64 border rounded p-3 text-xs font-mono" />}
+                </div>
+            );
+        };
+
+        const PasswordGenerator = () => {
+            const [len, setLen] = useState(16);
+            const [pwd, setPwd] = useState('');
+            const gen = () => {
+                const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+                setPwd(Array(len).fill(0).map(() => chars[Math.floor(Math.random() * chars.length)]).join(''));
+            };
+            useEffect(gen, []);
+            return (
+                <div className="bg-white p-8 rounded-xl border shadow-sm max-w-2xl mx-auto text-center">
+                    <div className="text-4xl font-mono font-bold mb-6 break-all bg-slate-50 p-4 rounded-xl border">{pwd}</div>
+                    <input type="range" min="4" max="64" value={len} onChange={e=>setLen(+e.target.value)} className="w-full mb-2"/>
+                    <div className="text-slate-500 mb-6">Length: {len}</div>
+                    <button onClick={gen} className="bg-brand-600 text-white px-8 py-3 rounded-full font-bold">Regenerate</button>
+                </div>
+            );
+        };
+
+        const WordCounter = () => {
+            const [txt, setTxt] = useState('');
+            const w = txt.trim() ? txt.trim().split(/\s+/).length : 0;
+            const c = txt.length;
+            return (
+                <div className="bg-white p-6 rounded-xl border shadow-sm space-y-4">
+                    <div className="flex gap-4 text-sm font-bold text-slate-500 uppercase tracking-wider">
+                        <span>Words: <b className="text-brand-600 text-lg">{w}</b></span>
+                        <span>Chars: <b className="text-brand-600 text-lg">{c}</b></span>
+                    </div>
+                    <textarea value={txt} onChange={e=>setTxt(e.target.value)} className="w-full h-64 border rounded p-4 outline-none focus:ring-2 focus:ring-brand-500" placeholder="Type here..." />
+                </div>
+            );
+        };
+
+        const AIImageGenerator = () => {
+            const [p, setP] = useState('');
+            const [img, setImg] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const gen = async () => {
+                if(!p) return; setLoading(true);
+                const res = await generateImage(p);
+                setImg(res); setLoading(false);
+            };
+            return (
+                <div className="max-w-2xl mx-auto space-y-6">
+                    <div className="flex gap-2">
+                        <input value={p} onChange={e=>setP(e.target.value)} className="border p-3 rounded-xl flex-1 outline-none focus:border-purple-500" placeholder="Describe an image..." onKeyDown={e=>e.key==='Enter'&&gen()}/>
+                        <button onClick={gen} disabled={loading} className="bg-purple-600 text-white px-6 rounded-xl font-bold">{loading?'...':'Generate'}</button>
+                    </div>
+                    {img && <div className="bg-white p-4 rounded-xl shadow border"><img src={img} className="w-full rounded"/></div>}
+                </div>
+            );
+        };
+
+        const BMICalculator = () => {
+            const [w, setW] = useState(''); const [h, setH] = useState(''); const [res, setRes] = useState(null);
+            const calc = () => {
+                const val = +w / ((+h/100)**2);
+                setRes(val);
+            };
+            return (
+                <div className="max-w-md mx-auto bg-white p-6 rounded-xl border shadow-sm space-y-4">
+                    <input type="number" placeholder="Weight (kg)" value={w} onChange={e=>setW(e.target.value)} className="w-full border p-2 rounded"/>
+                    <input type="number" placeholder="Height (cm)" value={h} onChange={e=>setH(e.target.value)} className="w-full border p-2 rounded"/>
+                    <button onClick={calc} className="w-full bg-brand-600 text-white py-2 rounded font-bold">Calculate</button>
+                    {res && <div className="text-center text-2xl font-bold mt-4">BMI: {res.toFixed(1)}</div>}
+                </div>
+            );
+        };
+
+        const WhoisLookup = () => {
+            const [d, setD] = useState(''); const [data, setData] = useState(null); const [load, setLoad] = useState(false);
+            const lookup = async () => {
+                setLoad(true); setData(null);
+                try { const r = await fetch(`https://rdap.org/domain/${d}`); if(!r.ok) throw new Error(); setData(await r.json()); } 
+                catch(e) { setData({error:'Not found or invalid'}); }
+                setLoad(false);
+            };
+            return (
+                <div className="max-w-2xl mx-auto space-y-4">
+                    <div className="flex gap-2"><input value={d} onChange={e=>setD(e.target.value)} className="border p-2 rounded flex-1" placeholder="example.com"/><button onClick={lookup} className="bg-brand-600 text-white px-4 rounded">Lookup</button></div>
+                    {load && <div>Loading...</div>}
+                    {data && <div className="bg-white p-4 border rounded h-64 overflow-auto"><pre className="text-xs">{JSON.stringify(data,null,2)}</pre></div>}
+                </div>
+            );
+        };
+
+        const YouTubeThumbnail = () => {
+            const [url, setUrl] = useState(''); const [id, setId] = useState(null);
+            const extract = () => {
+                const m = url.match(/(?:youtu\.be\/|youtube\.com(?:\/embed\/|\/v\/|\/watch\?v=|\/user\/\S+|\/ytscreeningroom\?v=))([\w\-]{10,12})\b/);
+                setId(m ? m[1] : null);
+            };
+            return (
+                <div className="max-w-3xl mx-auto space-y-6">
+                    <div className="flex gap-2"><input value={url} onChange={e=>setUrl(e.target.value)} className="border p-2 flex-1 rounded" placeholder="YouTube URL"/><button onClick={extract} className="bg-red-600 text-white px-4 rounded">Get</button></div>
+                    {id && (
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div className="bg-white p-4 border rounded"><img src={`https://img.youtube.com/vi/${id}/maxresdefault.jpg`} className="w-full rounded"/><div className="mt-2 font-bold">Max Res</div></div>
+                            <div className="bg-white p-4 border rounded"><img src={`https://img.youtube.com/vi/${id}/hqdefault.jpg`} className="w-full rounded"/><div className="mt-2 font-bold">High Quality</div></div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const AICodeGenerator = () => {
+            const [p, setP] = useState(''); const [code, setCode] = useState(''); const [load, setLoad] = useState(false);
+            const gen = async () => { setLoad(true); setCode(await generateCodeSnippet(p)); setLoad(false); };
+            return (
+                <div className="space-y-6">
+                    <div className="bg-indigo-600 p-8 rounded-xl text-white">
+                        <h3 className="text-xl font-bold mb-4">AI Tool Builder</h3>
+                        <div className="flex gap-2"><input value={p} onChange={e=>setP(e.target.value)} className="flex-1 p-3 rounded text-black" placeholder="Describe a tool (e.g. A digital clock)..."/><button onClick={gen} disabled={load} className="bg-yellow-400 text-black px-6 rounded font-bold">{load?'...':'Build'}</button></div>
+                    </div>
+                    {code && <div className="grid md:grid-cols-2 gap-6"><textarea readOnly value={code} className="h-96 bg-slate-900 text-green-400 p-4 rounded font-mono text-xs"/><iframe srcDoc={code} className="w-full h-96 bg-white border rounded"/></div>}
+                </div>
+            );
+        };
+
+        // Placeholder for simpler tools
+        const SimpleTool = ({name}) => <div className="text-center py-12 text-slate-400 font-medium">The {name} tool is ready to be implemented.</div>;
+
+        // --- ROUTING & PAGES ---
+
+        const TOOLS = [
+            { id: 'ai-chat', name: 'AI Chat Assistant', description: 'Chat with an intelligent AI assistant.', category: ToolCategory.AI, icon: MessageSquare, component: AIChat },
+            { id: 'ai-image-generator', name: 'AI Image Generator', description: 'Generate unique images from text.', category: ToolCategory.AI, icon: ImagePlus, component: AIImageGenerator },
+            { id: 'ai-coder', name: 'AI Tool Generator', description: 'Build mini-tools with AI.', category: ToolCategory.AI, icon: Code2, component: AICodeGenerator },
+            { id: 'invoice-generator', name: 'Invoice Generator', description: 'Create professional PDF invoices.', category: ToolCategory.FINANCE, icon: FileText, component: InvoiceGenerator },
+            { id: 'investment-calculator', name: 'Investment Calculator', description: 'Calculate compound interest.', category: ToolCategory.FINANCE, icon: Calculator, component: InvestmentCalculator },
+            { id: 'qr-generator', name: 'QR Code Generator', description: 'Generate custom QR codes.', category: ToolCategory.DEVELOPER, icon: QrCode, component: QRCodeGenerator },
+            { id: 'image-base64', name: 'Image to Base64', description: 'Convert images to Base64.', category: ToolCategory.IMAGE, icon: ImageIcon, component: ImageBase64 },
+            { id: 'unit-converter', name: 'Unit Converter', description: 'Convert between Metric and Imperial.', category: ToolCategory.CONVERTER, icon: Repeat, component: UnitConverter },
+            { id: 'bmi-calculator', name: 'BMI Calculator', description: 'Calculate Body Mass Index.', category: ToolCategory.CONVERTER, icon: Activity, component: BMICalculator },
+            { id: 'password-generator', name: 'Password Generator', description: 'Generate secure passwords.', category: ToolCategory.DEVELOPER, icon: Lock, component: PasswordGenerator },
+            { id: 'word-counter', name: 'Word Counter', description: 'Count words and characters.', category: ToolCategory.CONVERTER, icon: Type, component: WordCounter },
+            { id: 'uuid-generator', name: 'UUID Generator', description: 'Generate UUIDs.', category: ToolCategory.DEVELOPER, icon: Key, component: UUIDGenerator },
+            { id: 'youtube-thumbnail', name: 'YouTube Tool', description: 'Get thumbnails and links.', category: ToolCategory.IMAGE, icon: Video, component: YouTubeThumbnail },
+            { id: 'timezone-converter', name: 'Timezone Converter', description: 'Compare times across zones.', category: ToolCategory.CONVERTER, icon: Globe, component: TimezoneConverter },
+            { id: 'whois', name: 'Whois Lookup', description: 'Check domain info.', category: ToolCategory.DEVELOPER, icon: Search, component: WhoisLookup },
+        ];
+
+        const Layout = ({ children }) => {
+            const [menuOpen, setMenuOpen] = useState(false);
+            const nav = useNavigate();
+            const loc = useLocation();
+            const links = [{name:'Home',path:'/'},{name:'All Tools',path:'/tools'},{name:'About',path:'/about'}];
+            return (
+                <div className="min-h-screen flex flex-col bg-slate-50">
+                    <header className="bg-white shadow-sm sticky top-0 z-50 no-print">
+                        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+                            <Link to="/" className="flex items-center gap-2 text-brand-600 text-xl font-bold"><Wrench className="w-7 h-7"/> ToolMaster</Link>
+                            <nav className="hidden md:flex gap-6">{links.map(l=><Link key={l.name} to={l.path} className={`text-sm font-medium ${loc.pathname===l.path?'text-brand-600':'text-slate-600'}`}>{l.name}</Link>)}</nav>
+                            <button className="md:hidden" onClick={()=>setMenuOpen(!menuOpen)}><Menu/></button>
+                        </div>
+                        {menuOpen && <div className="md:hidden border-t p-4 bg-white flex flex-col gap-2">{links.map(l=><Link key={l.name} to={l.path} onClick={()=>setMenuOpen(false)} className="py-2">{l.name}</Link>)}</div>}
+                    </header>
+                    <main className="flex-grow">{children}</main>
+                    <footer className="bg-slate-900 text-white py-8 mt-12 no-print"><div className="container mx-auto px-4 text-center text-slate-400 text-sm">&copy; 2025 ToolMaster Pro. Free Online Tools.</div></footer>
+                </div>
+            );
+        };
+
+        const Home = () => {
+            return (
+                <div>
+                    <div className="bg-white border-b py-20 text-center px-4">
+                        <h1 className="text-4xl md:text-6xl font-extrabold text-slate-900 mb-6">Essential Online Tools<br/><span className="text-brand-600">In One Place</span></h1>
+                        <p className="text-lg text-slate-600 mb-8 max-w-2xl mx-auto">Access 50+ free developer, financial, and AI tools. Fast, secure, and no installation required.</p>
+                        <div className="flex justify-center gap-4"><Link to="/tools" className="bg-brand-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-brand-700 transition">Explore Tools</Link></div>
+                    </div>
+                    <div className="container mx-auto px-4 py-12">
+                        <AdUnit type="header"/>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {TOOLS.slice(0, 6).map(t => (
+                                <Link key={t.id} to={`/tool/${t.id}`} className="bg-white p-6 rounded-xl shadow-sm border hover:border-brand-300 transition group">
+                                    <div className="flex items-center gap-3 mb-2"><div className="p-2 bg-slate-50 rounded-lg text-slate-600 group-hover:text-brand-600"><t.icon className="w-6 h-6"/></div><h3 className="font-bold text-slate-800">{t.name}</h3></div>
+                                    <p className="text-sm text-slate-500">{t.description}</p>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AllTools = () => {
+            const [q, setQ] = useState('');
+            const [cat, setCat] = useState('All');
+            const filtered = TOOLS.filter(t => (cat==='All'||t.category===cat) && t.name.toLowerCase().includes(q.toLowerCase()));
+            return (
+                <div className="container mx-auto px-4 py-8">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border mb-8">
+                        <div className="flex flex-col md:flex-row gap-4 justify-between">
+                            <input type="text" placeholder="Search tools..." value={q} onChange={e=>setQ(e.target.value)} className="border p-2 rounded-lg w-full md:w-64"/>
+                            <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
+                                <button onClick={()=>setCat('All')} className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap ${cat==='All'?'bg-slate-800 text-white':'bg-slate-100'}`}>All</button>
+                                {Object.values(ToolCategory).map(c=><button key={c} onClick={()=>setCat(c)} className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap ${cat===c?'bg-brand-600 text-white':'bg-slate-100'}`}>{c}</button>)}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {filtered.map(t => (
+                            <Link key={t.id} to={`/tool/${t.id}`} className="bg-white p-6 rounded-xl shadow-sm border hover:border-brand-300 transition group">
+                                <div className="flex items-center gap-3 mb-2"><div className="p-2 bg-slate-50 rounded-lg text-slate-600 group-hover:text-brand-600"><t.icon className="w-6 h-6"/></div><h3 className="font-bold text-slate-800">{t.name}</h3></div>
+                                <p className="text-sm text-slate-500">{t.description}</p>
+                            </Link>
+                        ))}
+                        {filtered.length===0 && <div className="col-span-full text-center py-12 text-slate-400">No tools found.</div>}
+                    </div>
+                </div>
+            );
+        };
+
+        const SingleTool = () => {
+            const { id } = useParams();
+            const tool = TOOLS.find(t => t.id === id);
+            const [shareOpen, setShareOpen] = useState(false);
+            
+            if(!tool) return <div className="text-center py-20">Tool not found <Link to="/tools" className="text-brand-600">Go back</Link></div>;
+            
+            const Component = tool.component || SimpleTool;
+
+            return (
+                <div className="container mx-auto px-4 py-8">
+                    <div className="mb-6 flex justify-between items-center no-print">
+                        <Link to="/tools" className="flex items-center gap-2 text-slate-500 hover:text-slate-800"><ArrowLeft className="w-4 h-4"/> Back</Link>
+                        <button onClick={()=>setShareOpen(true)} className="flex items-center gap-2 text-brand-600 bg-brand-50 px-3 py-1 rounded text-sm"><Share2 className="w-4 h-4"/> Share</button>
+                    </div>
+                    <div className="mb-8 no-print">
+                        <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3"><tool.icon className="w-8 h-8 text-brand-600"/> {tool.name}</h1>
+                        <p className="text-slate-500 mt-1">{tool.description}</p>
+                    </div>
+                    <AdUnit type="header"/>
+                    <div className="bg-white p-1 rounded-2xl shadow-sm border overflow-hidden min-h-[400px]">
+                        <div className="bg-slate-50/50 p-6 md:p-8">
+                            <Component name={tool.name} />
+                        </div>
+                    </div>
+                    <ShareModal isOpen={shareOpen} onClose={()=>setShareOpen(false)} title={tool.name} url={window.location.href} />
+                </div>
+            );
+        };
+
+        const StaticPage = ({title}) => (
+            <div className="container mx-auto px-4 py-12 max-w-3xl">
+                <h1 className="text-3xl font-bold mb-6">{title}</h1>
+                <div className="prose text-slate-600"><p>Content for {title} goes here. This is a static page placeholder.</p></div>
+            </div>
+        );
+
+        const App = () => {
+            return (
+                <HashRouter>
+                    <Layout>
+                        <Routes>
+                            <Route path="/" element={<Home />} />
+                            <Route path="/tools" element={<AllTools />} />
+                            <Route path="/tool/:id" element={<SingleTool />} />
+                            <Route path="/about" element={<StaticPage title="About Us" />} />
+                        </Routes>
+                    </Layout>
+                </HashRouter>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
